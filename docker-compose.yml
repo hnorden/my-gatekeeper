@@ -1,0 +1,136 @@
+version: "3.7"
+
+services:
+
+  ingress-gatekeeper:
+    image: quay.io/keycloak/keycloak-gatekeeper:latest
+    entrypoint:
+      - /opt/keycloak-gatekeeper
+    command:
+      - --discovery-url=http://keycloak:8080/auth/realms/demorealm
+      - --client-id=ingress-gatekeeper-client
+      - --client-secret=d0b8122f-8dfb-46b7-b68a-f5cc4e25d001
+      # Only transfer cookies via HTTPS
+      - --secure-cookie=false
+      # Disable JavaScript API for cookies - prevent XSS
+      - --http-only-cookie=true
+      - --listen=:3000
+      - --preserve-host=true
+      - --redirection-url=http://ingress-gatekeeper:3000
+      - --upstream-url=http://rust-service:8000
+      - --resources=uri=/*|roles=user|methods=GET
+      - --verbose
+      - --enable-logging=true
+      - --enable-json-logging=true
+    expose:
+      - "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - keycloak
+  
+  gatekeeper-auth-proxy:
+    image: quay.io/keycloak/keycloak-gatekeeper:latest
+    entrypoint:
+      - /opt/keycloak-gatekeeper
+    command:
+      - --discovery-url=http://keycloak:8080/auth/realms/demorealm
+      - --client-id=gatekeeper-auth-proxy-client
+      - --client-secret=d0b8122f-8dfb-46b7-b68a-f5cc4e25d000
+      - --listen=:4000
+      - --preserve-host=true
+      - --enable-forwarding=true
+      - --forwarding-username=auth-proxy-user
+      - --forwarding-password=auth-proxy-user
+      - --verbose
+      - --enable-logging=true
+      - --enable-json-logging=true
+    expose:
+      - "4000"
+    ports:
+      - "4000:4000"
+    depends_on:
+      - keycloak
+
+  postgres:
+    image: postgres
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: password
+    expose:
+      - "5432"
+    ports:
+      - "5432:5432"
+
+  keycloak-setup:
+    image: docker/compose:1.24.1
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+      - type: bind
+        source: ./docker-compose.yml
+        target: /docker-compose.yml
+      - type: bind
+        source: ./.env
+        target: /.env
+    entrypoint: ""
+    command:
+      - /bin/sh
+      - -ce
+      - |
+        docker-compose ps
+        echo "wait for precondition..."
+        ( docker-compose logs --follow --tail 2 keycloak & ) | grep -q 'Admin console listening'
+        echo "precondition matched, continue..."
+
+        echo "keycloak server state"
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/jboss-cli.sh --connect --command=":read-attribute(name=server-state)"
+
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080/auth --realm master --user admin --password admin
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh create realms -s realm=demorealm -s enabled=true
+
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh create users -r demorealm -s username=testuser -s enabled=true
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh create users -r demorealm -s username=auth-proxy-user -s enabled=true
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh set-password -r demorealm --username testuser --new-password testuser
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh set-password -r demorealm --username auth-proxy-user --new-password auth-proxy-user
+
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh create roles -r demorealm -s name=user -s 'description=Regular user with limited set of permissions'
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh create roles -r demorealm -s name=proxy -s 'description=Proxy user with limited set of permissions'
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh add-roles -r demorealm --uusername testuser --rolename user
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh add-roles -r demorealm --uusername auth-proxy-user --rolename proxy
+
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh create clients -r demorealm -s id=79810a33-74b8-4884-a8a7-36060148f294 -s clientId=gatekeeper-auth-proxy-client -s enabled=true -s serviceAccountsEnabled=true -s clientAuthenticatorType=client-secret -s secret=d0b8122f-8dfb-46b7-b68a-f5cc4e25d000 -s 'redirectUris=["/*"]' -s directAccessGrantsEnabled=true
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh create clients -r demorealm -s id=7ccace47-fe11-46a2-be84-809ed385d598 -s clientId=ingress-gatekeeper-client -s enabled=true -s serviceAccountsEnabled=true -s clientAuthenticatorType=client-secret -s secret=d0b8122f-8dfb-46b7-b68a-f5cc4e25d001 -s 'redirectUris=["http://ingress-gatekeeper:3000/oauth/callback", "http://localhost:3000/oauth/callback"]'
+
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh create -r demorealm client-scopes -s id=25b12a50-4c12-44bb-a343-053931860f48 -s name=good-service -s protocol=openid-connect
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh create -r demorealm client-scopes/25b12a50-4c12-44bb-a343-053931860f48/protocol-mappers/models -s id=2bdf8651-4031-4a50-966b-566258160311 -s protocol=openid-connect -s name=my-app-audience -s protocolMapper=oidc-audience-mapper -s 'config={"id.token.claim":"false","access.token.claim":"true","included.client.audience":"ingress-gatekeeper-client"}'
+
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh update -r demorealm clients/79810a33-74b8-4884-a8a7-36060148f294/default-client-scopes/25b12a50-4c12-44bb-a343-053931860f48
+        docker-compose exec -T keycloak /opt/jboss/keycloak/bin/kcadm.sh update -r demorealm clients/7ccace47-fe11-46a2-be84-809ed385d598/default-client-scopes/25b12a50-4c12-44bb-a343-053931860f48
+
+        echo "docker-compose service 'keycloak-setup' finished."
+    depends_on:
+      - keycloak
+
+  keycloak:
+    image: jboss/keycloak:7.0.0
+    environment:
+      DB_VENDOR: POSTGRES
+      DB_ADDR: postgres
+      DB_DATABASE: keycloak
+      DB_USER: keycloak
+      DB_SCHEMA: public
+      DB_PASSWORD: password
+      KEYCLOAK_USER: admin
+      KEYCLOAK_PASSWORD: admin
+      PROXY_ADDRESS_FORWARDING: "true"
+      # Uncomment the line below if you want to specify JDBC parameters. The parameter below is just an example, and it shouldn't be used in production without knowledge. It is highly recommended that you read the PostgreSQL JDBC driver documentation in order to use it.
+      #JDBC_PARAMS: "ssl=true"
+    expose:
+      - "8080"
+    ports:
+      - 8080:8080
+    depends_on:
+      - postgres
