@@ -6,9 +6,8 @@
 
 # Requires
 # sudo bash -c 'echo -e "127.0.0.1 keycloak" >> /etc/hosts'
-# sudo bash -c 'echo -e "127.0.0.1 ingress-gatekeeper" >> /etc/hosts'
 
-init=$(curl --verbose "http://ingress-gatekeeper:3000/health" -L 2>&1)
+init=$(curl --verbose "http://localhost:3000/health" -L 2>&1)
 
 requestUri=$(echo "$init" | sed -n -r 's/< Set-Cookie: (request_uri=.*); Path.*/\1/gp')
 oauthTokenRequestState=$(echo "$init" | sed -n -r 's/< Set-Cookie: (OAuth_Token_Request_State=.*); Path.*/\1/gp')
@@ -25,13 +24,13 @@ login=$(curl --verbose "http://localhost:8080/auth/realms/demorealm/login-action
 
 keycloakIdentity=$(echo "$login" | sed -n -r 's/< Set-Cookie: (KEYCLOAK_IDENTITY=.*); Version.*/\1/gp')
 keycloakSession=$(echo "$login" | sed -n -r 's/< Set-Cookie: (KEYCLOAK_SESSION=.*); Version.*/\1/gp')
-gatekeeperLocation=$(echo "$login" | sed -n -r 's/< Location: (.*)/\1/gp' | tr -d '\r') # remove '%0D'
+gatekeeperLocation=$(echo "$login" | sed -n -r 's/< Location: (.*)/\1/gp' | sed -n -r 's/http:\/\/ingress-gatekeeper:3000/http:\/\/localhost:3000/gp' | tr -d '\r') # remove '%0D'
 
 callback=$(curl --verbose "$gatekeeperLocation" -b "$requestUri; $oauthTokenRequestState;" 2>&1)
 kcAccess=$(echo "$callback" | sed -n -r 's/< Set-Cookie: (kc-access=.*); Path.*/\1/gp')
 kcState=$(echo "$callback" | sed -n -r 's/< Set-Cookie: (kc-state=.*); Path.*/\1/gp')
 
-myResource=$(curl --verbose "http://ingress-gatekeeper:3000/health?next=http://ingress-gatekeeper:3000/health" -H "X-Auth-Username: myUsername" -b "$kcAccess;" 2>&1)
+myResource=$(curl --verbose "http://localhost:3000/health?next=http://ingress-gatekeeper:3000/health" -H "X-Auth-Username: myUsername" -b "$kcAccess;" 2>&1)
 
 # printf "\ninit >>>>>\n"
 # echo "$init"
