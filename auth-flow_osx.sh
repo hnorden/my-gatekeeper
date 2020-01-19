@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Setup on macOS
+# brew install gnu-sed
+# ln -s /usr/local/bin/gsed /usr/local/bin/sed
+
+# Requires
+# sudo bash -c 'echo -e "127.0.0.1 keycloak" >> /etc/hosts'
+# sudo bash -c 'echo -e "127.0.0.1 ingress-gatekeeper" >> /etc/hosts'
+
 init=$(curl --verbose "http://ingress-gatekeeper:3000/health" -L 2>&1)
 
 requestUri=$(echo "$init" | sed -n -r 's/< Set-Cookie: (request_uri=.*); Path.*/\1/gp')
@@ -13,7 +21,7 @@ authenticateUrlSessionCode=$(echo "$authenticateUrl" | sed -n -r 's/.*(session_c
 authenticateUrlExecution=$(echo "$authenticateUrl" | sed -n -r 's/.*(execution=.*)&amp;client_id.*/\1/gp')
 authenticateUrlTabId=$(echo "$authenticateUrl" | sed -n -r 's/^.*(tab_id=.*)$/\1/gp')
 
-login=$(curl --verbose "http://keycloak:8080/auth/realms/demorealm/login-actions/authenticate?$authenticateUrlSessionCode&$authenticateUrlExecution&client_id=ingress-gatekeeper-client&$authenticateUrlTabId" -X POST --data "username=testuser&password=testuser&login=Log+In" -H "Content-Type: application/x-www-form-urlencoded" -b "$authSessionId; $kcRestart;" 2>&1)
+login=$(curl --verbose "http://localhost:8080/auth/realms/demorealm/login-actions/authenticate?$authenticateUrlSessionCode&$authenticateUrlExecution&client_id=ingress-gatekeeper-client&$authenticateUrlTabId" -X POST --data "username=testuser&password=testuser&login=Log+In" -H "Content-Type: application/x-www-form-urlencoded" -b "$authSessionId; $kcRestart;" 2>&1)
 
 keycloakIdentity=$(echo "$login" | sed -n -r 's/< Set-Cookie: (KEYCLOAK_IDENTITY=.*); Version.*/\1/gp')
 keycloakSession=$(echo "$login" | sed -n -r 's/< Set-Cookie: (KEYCLOAK_SESSION=.*); Version.*/\1/gp')
