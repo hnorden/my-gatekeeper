@@ -4,16 +4,13 @@
 # brew install gnu-sed
 # ln -s /usr/local/bin/gsed /usr/local/bin/sed
 
-# Requires
-# sudo bash -c 'echo -e "127.0.0.1 keycloak" >> /etc/hosts'
-
 init=$(curl --verbose "http://localhost:3000/health" 2>&1)
 
 authorizeLocation=$(echo "$init" | sed -n -r 's/< Location: (.*)/\1/gp' | tr -d '\r') # remove '%0D'
 authorize=$(curl --verbose "http://localhost:3000/$authorizeLocation" 2>&1)
 
-keycloakLocation=$(echo "$authorize" | sed -n -r 's/< Location: (.*)/\1/gp' | tr -d '\r') # remove '%0D'
-initLogin=$(curl --verbose "$keycloakLocation" 2>&1)
+keycloakLocation=$(echo "$authorize" | sed -n -r 's/< Location: (.*)/\1/gp' | sed -n -r 's/http:\/\/keycloak:8080/http:\/\/localhost:8080/gp' | tr -d '\r') # remove '%0D'
+initLogin=$(curl --verbose -H "Host: keycloak:8080" "$keycloakLocation" 2>&1)
 
 requestUri=$(echo "$init" | sed -n -r 's/< Set-Cookie: (request_uri=.*); Path.*/\1/gp')
 oauthTokenRequestState=$(echo "$init" | sed -n -r 's/< Set-Cookie: (OAuth_Token_Request_State=.*); Path.*/\1/gp')
