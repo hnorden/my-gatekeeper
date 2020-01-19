@@ -2,6 +2,41 @@ version: "3.7"
 
 services:
 
+  rust-builder:
+    image: rustlang/rust:nightly
+    volumes:
+      - type: bind
+        source: ./rust-service
+        target: /opt/rust-service
+    entrypoint: ""
+    command:
+      - /bin/sh
+      - -ce
+      - |
+        cd /opt/rust-service/
+        # cargo update
+        cargo build
+  
+  rust-service:
+    image: rustlang/rust:nightly
+    volumes:
+      - type: bind
+        source: ./rust-service
+        target: /opt/rust-service
+      - type: bind
+        source: ./auth-flow_docker-compose.sh
+        target: /opt/auth-flow_docker-compose.sh
+    expose:
+      - "8000"
+    ports:
+      - "8000:8000"
+    entrypoint: ""
+    environment:
+      ROCKET_ADDRESS: 0.0.0.0
+      ROCKET_PORT: 8000
+      RUST_BACKTRACE: 1
+    command: ["/opt/rust-service/target/debug/rust-service"]
+
   ingress-gatekeeper:
     image: quay.io/keycloak/keycloak-gatekeeper:latest
     entrypoint:
