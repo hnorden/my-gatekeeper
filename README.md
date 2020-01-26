@@ -16,7 +16,7 @@ docker-compose logs --follow keycloak keycloak-setup
 Start gatekeeper instances running in different modes:
 
 ```
-docker-compose up -d ingress-gatekeeper gatekeeper-auth-proxy
+docker-compose up -d --scale ingress-gatekeeper=2 ingress-gatekeeper gatekeeper-auth-proxy
 docker-compose logs --follow ingress-gatekeeper gatekeeper-auth-proxy
 ```
 
@@ -144,3 +144,21 @@ curl "http://localhost:3000/health?next=http://ingress-gatekeeper:3000/health" -
   "username": "testuser"
 }
 ```
+
+# Cluster Compatibility
+
+To show cluster compatibility switch from port 3000 to 3001:
+
+```
+curl "http://localhost:3001/health?next=http://ingress-gatekeeper:3000/health" -H "X-Auth-Username: myUsername" -b "kc-access=eyJhb...;" | jq
+{
+  "next": {
+    "remote": {
+      "status": "OK",
+      "username": "testuser"
+    },
+    "url": "http://ingress-gatekeeper:3000/health"
+  },
+  "status": "OK",
+  "username": "testuser"
+}
