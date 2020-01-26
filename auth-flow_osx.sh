@@ -33,7 +33,7 @@ callback=$(curl --verbose "$gatekeeperLocation" -b "$requestUri; $oauthTokenRequ
 kcAccess=$(echo "$callback" | sed -n -r 's/< Set-Cookie: (kc-access=.*); Path.*/\1/gp')
 kcState=$(echo "$callback" | sed -n -r 's/< Set-Cookie: (kc-state=.*); Path.*/\1/gp')
 
-myResource=$(curl --verbose "http://localhost:3000/health?next=http://ingress-gatekeeper:3000/health" -H "X-Auth-Username: myUsername" -b "$kcAccess;" 2>&1)
+myResource=$(curl --verbose "http://localhost:3000/health?next=http://ingress-gatekeeper:3000/health&with_proxy=http://gatekeeper-auth-proxy:4000" -H "X-Auth-Username: myUsername" -b "$kcAccess;" 2>&1)
 
 # printf "\ninit >>>>>\n"
 # echo "$init"

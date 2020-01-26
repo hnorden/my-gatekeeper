@@ -53,7 +53,7 @@ services:
       - --preserve-host=true
       - --redirection-url=http://ingress-gatekeeper:3000
       - --upstream-url=http://rust-service:8000
-      - --resources=uri=/*|roles=user|methods=GET
+      - --resources=uri=/*|roles=user,proxy|methods=GET|require-any-role=true
       - --verbose
       - --enable-logging=true
       - --enable-json-logging=true

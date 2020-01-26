@@ -75,11 +75,11 @@ fn index() -> &'static str {
     "Hello, world!"
 }
 
-#[get("/health?<next>")]
-fn health(next: Option<String>, auth: AuthHeader) -> JsonValue {
+#[get("/health?<next>&<with_proxy>")]
+fn health(next: Option<String>, with_proxy: Option<String>, auth: AuthHeader) -> JsonValue {
     match next {
         Some(url) => {
-            let remote_response = call_next(&auth, &url);
+            let remote_response = call_next(&auth, &url, with_proxy);
             match remote_response {
                 Ok(remote) => json!({
                     "status": "OK",
@@ -125,8 +125,19 @@ fn auth_header_by_key(key: String, auth: AuthHeader) -> Option<JsonValue> {
 }
 
 #[tokio::main]
-async fn call_next(auth: &AuthHeader, url: &String) -> Result<(reqwest::StatusCode, JsonValue), Box<dyn std::error::Error>> {
-    let client = reqwest::Client::new();
+async fn call_next(auth: &AuthHeader, url: &String, with_proxy: Option<String>) -> Result<(reqwest::StatusCode, JsonValue), Box<dyn std::error::Error>> {
+    let client = match with_proxy {
+        Some(url) => {
+            let proxy = reqwest::Proxy::http(&url)?;
+            reqwest::Client::builder()
+            .proxy(proxy)
+            .build()?
+        },
+        None => {
+            reqwest::Client::new()
+        }
+    };
+
     let resp = client.get(url)
         .header("Authorization", &auth.authorization)
         .header("X-Auth-Username", &auth.username)
