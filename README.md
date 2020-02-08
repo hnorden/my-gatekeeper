@@ -13,13 +13,6 @@ docker-compose up -d keycloak-setup
 docker-compose logs --follow keycloak keycloak-setup
 ```
 
-Start gatekeeper instances running in different modes:
-
-```
-docker-compose up -d --scale ingress-gatekeeper=2 ingress-gatekeeper gatekeeper-auth-proxy
-docker-compose logs --follow ingress-gatekeeper gatekeeper-auth-proxy
-```
-
 Build rest-service with rust:
 
 ```
@@ -34,7 +27,36 @@ docker-compose up -d rust-service
 docker-compose logs --follow rust-service
 ```
 
+Start dispatcher to serve frontend and backend with same domain (this step is implied by ingress-gatekeeper dependencies):
+
+```
+docker-compose up -d ingress-nginx-dispatcher
+docker-compose logs --follow ingress-nginx-dispatcher frontend-nginx rust-service
+```
+
+Start gatekeeper instances running in different modes:
+
+```
+docker-compose up -d --scale ingress-gatekeeper=2 ingress-gatekeeper gatekeeper-auth-proxy
+docker-compose logs --follow ingress-gatekeeper gatekeeper-auth-proxy ingress-nginx-dispatcher frontend-nginx rust-service
+```
+
 ## Test the setup
+
+### Browser test
+
+Please add these hosts:
+
+```
+sudo bash -c 'echo -e "127.0.0.1 keycloak" >> /etc/hosts'
+sudo bash -c 'echo -e "127.0.0.1 ingress-gatekeeper" >> /etc/hosts'
+```
+
+Open your browser and navigate to [http://ingress-gatekeeper:3000/](http://ingress-gatekeeper:3000/).
+
+If you are not willing or able to alter your settings, you can fallback to the next section.
+
+### Script test
 
 Simulate keycloak login and call REST-Endpoint:
 

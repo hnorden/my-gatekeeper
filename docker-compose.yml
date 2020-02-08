@@ -2,6 +2,45 @@ version: "3.7"
 
 services:
 
+  ingress-nginx-dispatcher:
+    image: nginx
+    volumes:
+      - type: bind
+        source: ./nginx/conf.d/server.ingress.conf
+        target: /etc/nginx/conf.d/server.conf
+    ports:
+      - target: 8080
+        published: 8085
+        protocol: tcp
+        mode: host
+    command: >
+      /bin/bash -c
+      "exec nginx-debug -g 'daemon off;'"
+    depends_on:
+      - frontend-nginx
+      - rust-service
+
+  frontend-nginx:
+    image: nginx
+    volumes:
+      - type: bind
+        source: ./nginx/conf.d/server.frontend.conf
+        target: /etc/nginx/conf.d/server.conf
+      - type: bind
+        source: ./frontend
+        target: /var/www
+      # - type: bind
+      #   source: ./nginx/conf.d/frontends
+      #   target: /etc/nginx/conf.d/frontends
+    ports:
+      - target: 8080
+        published: 8084
+        protocol: tcp
+        mode: host
+    command: >
+      /bin/bash -c
+      "exec nginx-debug -g 'daemon off;'"
+
   rust-builder:
     image: rustlang/rust:nightly
     volumes:
@@ -16,7 +55,7 @@ services:
         cd /opt/rust-service/
         # cargo update
         cargo build
-  
+
   rust-service:
     image: rustlang/rust:nightly
     volumes:
@@ -52,7 +91,7 @@ services:
       - --listen=:3000
       - --preserve-host=true
       - --redirection-url=http://ingress-gatekeeper:3000
-      - --upstream-url=http://rust-service:8000
+      - --upstream-url=http://ingress-nginx-dispatcher:8080
       - --resources=uri=/*|roles=user,proxy|methods=GET|require-any-role=true
       - --verbose
       - --enable-logging=true
@@ -63,7 +102,8 @@ services:
       - "3000-3001:3000"
     depends_on:
       - keycloak
-  
+      - ingress-nginx-dispatcher
+
   gatekeeper-auth-proxy:
     image: quay.io/keycloak/keycloak-gatekeeper:latest
     entrypoint:
